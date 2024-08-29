@@ -1,0 +1,12 @@
+[package]
+name = "example-rust-wc"
+version = "0.1.0"
+edition = "2021"
+description = "word, line, character, and byte count"
+
+[dependencies]
+clap = { version = "4.5.16", features = ["derive"] }
+
+[[bin]]
+name = "oxwc"
+path = "src/main.rs"
