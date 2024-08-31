@@ -1,5 +1,5 @@
 [package]
-name = "example-rust-wc"
+name = "rust-wc"
 version = "0.1.0"
 edition = "2021"
 description = "word, line, character, and byte count"
