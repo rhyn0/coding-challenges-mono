@@ -20,6 +20,10 @@ If you only want to run that command against one package, you can use a `-p pkgi
 
 > Run `cargo help pkgid` to learn more about `pkgid`.
 
+### Adding Dependencies
+
+While easiest to still change directory into the specific project, you can add dependencies to a project by doing `cargo add <DEP> -p <pkgid>`. E.g. `cargo add clap -p rust-wc`.
+
 ### Run Tests
 
 Run all tests - `cargo test` in this directory `coding-challenges-mono` or whatever you have it named.
