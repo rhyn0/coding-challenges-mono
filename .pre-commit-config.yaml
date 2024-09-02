@@ -32,4 +32,6 @@ repos:
             "clippy::nursery",
             "-D",
             "clippy::all",
+            "-A",
+            "dead_code",
           ]

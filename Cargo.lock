@@ -1568,6 +1568,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rust-huffman"
+version = "0.1.0"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "rust-wc"
 version = "0.1.0"
 dependencies = [
