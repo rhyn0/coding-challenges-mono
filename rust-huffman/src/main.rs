@@ -1,3 +1,4 @@
+mod cli;
 mod counter;
 mod encoder;
 fn main() {
