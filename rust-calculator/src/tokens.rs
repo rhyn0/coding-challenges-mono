@@ -1,5 +1,5 @@
 use log::debug;
-use std::str::FromStr;
+use std::{cmp, str::FromStr};
 use thiserror::Error;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -8,6 +8,23 @@ pub enum OperatorType {
     Sub,
     Div,
     Mul,
+}
+
+impl PartialOrd for OperatorType {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OperatorType {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        let precedence = |op: &Self| match op {
+            Self::Mul | Self::Div => 2, // Higher precedence
+            Self::Add | Self::Sub => 1, // Lower precedence
+        };
+        debug!("Comparing operators {:?} and {:?}", self, other);
+        precedence(self).cmp(&precedence(other))
+    }
 }
 
 impl OperatorType {
@@ -48,6 +65,8 @@ pub enum MathToken {
     IntOperand(isize),
     // FloatOperand(f64),
     Operator(OperatorType),
+    /// Opening or closing parentheses
+    Parens(bool),
 }
 
 impl FromStr for MathToken {
@@ -56,6 +75,12 @@ impl FromStr for MathToken {
         // if let Ok(f) = s.parse::<f64>() {
         //     return Ok(Self::FloatOperand(f));
         // } else
+        debug!("Checking token as parentheses");
+        if s == "(" {
+            return Ok(Self::Parens(true));
+        } else if s == ")" {
+            return Ok(Self::Parens(false));
+        }
         debug!("Evaluating '{}' as an operand", s);
         if let Ok(i) = s.parse::<isize>() {
             return Ok(Self::IntOperand(i));
@@ -78,7 +103,30 @@ impl FromStr for Expression {
     /// <https://en.wikipedia.org/wiki/Shunting_yard_algorithm#The_algorithm_in_detail>
     /// Assume that tokens (besides parentheses) are separated by spaces.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let toks: Result<Vec<_>, _> = s.split_whitespace().map(str::parse).collect();
+        let toks: Result<Vec<_>, _> = s
+            .split_whitespace()
+            .flat_map(|t| {
+                if t.starts_with('(') {
+                    let mut chars = t.chars();
+                    let first = chars
+                        .next()
+                        .expect("Opening parenthesis to exist")
+                        .to_string();
+                    let rest = chars.collect::<String>();
+                    vec![first.parse::<MathToken>(), rest.parse::<MathToken>()]
+                } else if t.ends_with(')') {
+                    let chars = t.chars();
+                    let rest: String = chars.clone().take(t.len() - 1).collect();
+                    let last = chars
+                        .last()
+                        .expect("Closing parenthesis to exist")
+                        .to_string();
+                    vec![rest.parse::<MathToken>(), last.parse::<MathToken>()]
+                } else {
+                    vec![t.parse::<MathToken>()]
+                }
+            })
+            .collect();
 
         toks.map_or_else(Err, |tokens| Ok(Self { tokens }))
     }
@@ -145,10 +193,6 @@ mod tests {
     fn test_equation_from_str() {
         let input = "3 + 4";
         assert!(input.parse::<Expression>().is_ok());
-    }
-    #[test]
-    fn test_equation_postfix() {
-        let input = "3 + 4";
         assert_eq!(
             input.parse::<Expression>().unwrap(),
             Expression {
@@ -158,6 +202,22 @@ mod tests {
                     MathToken::IntOperand(4),
                 ]
             }
+        );
+    }
+    #[test]
+    fn test_expression_parentheses() {
+        let input = "(3 + 4) * 2";
+        assert_eq!(
+            input.parse::<Expression>().unwrap(),
+            Expression::new(vec![
+                MathToken::Parens(true),
+                MathToken::IntOperand(3),
+                MathToken::Operator(OperatorType::Add),
+                MathToken::IntOperand(4),
+                MathToken::Parens(false),
+                MathToken::Operator(OperatorType::Mul),
+                MathToken::IntOperand(2),
+            ])
         );
     }
 }
