@@ -20,4 +20,4 @@ jobs:
         run: uv tool install pre-commit --with pre-commit-uv
 
       - name: Run pre-commit
-        run: uv tool pre-commit run --hook-stage manual --color never >> $GITHUB_SUMMARY
+        run: uv tool pre-commit run --hook-stage manual --color never >> $GITHUB_STEP_SUMMARY
