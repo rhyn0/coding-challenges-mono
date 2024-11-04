@@ -1,0 +1,23 @@
+name: Pre Commit
+
+on: push
+
+jobs:
+  pre-commit:
+    name: Run pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          # install version 0.4.29
+          version: "0.4.29"
+          enable-cache: true
+
+      - name: Install pre-commit
+        run: uv tool install pre-commit --with pre-commit-uv
+
+      - name: Run pre-commit
+        run: uv tool pre-commit run --hook-stage manual --color never >> $GITHUB_SUMMARY
