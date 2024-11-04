@@ -235,4 +235,13 @@ mod tests {
         ]);
         assert_eq!(PostExpression::try_from(eq).unwrap().eval(), 14);
     }
+    #[test]
+    fn test_eval_power() {
+        let eq = Expression::new(vec![
+            MathToken::IntOperand(3),
+            MathToken::Operator(OperatorType::Pow),
+            MathToken::IntOperand(4),
+        ]);
+        assert_eq!(PostExpression::try_from(eq).unwrap().eval(), 81);
+    }
 }

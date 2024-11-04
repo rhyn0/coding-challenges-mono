@@ -8,6 +8,7 @@ pub enum OperatorType {
     Sub,
     Div,
     Mul,
+    Pow,
 }
 
 impl PartialOrd for OperatorType {
@@ -19,8 +20,10 @@ impl PartialOrd for OperatorType {
 impl Ord for OperatorType {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         let precedence = |op: &Self| match op {
-            Self::Mul | Self::Div => 2, // Higher precedence
-            Self::Add | Self::Sub => 1, // Lower precedence
+            // greater value means heigher precedence.
+            Self::Pow => 3,
+            Self::Mul | Self::Div => 2,
+            Self::Add | Self::Sub => 1,
         };
         debug!("Comparing operators {:?} and {:?}", self, other);
         precedence(self).cmp(&precedence(other))
@@ -28,12 +31,14 @@ impl Ord for OperatorType {
 }
 
 impl OperatorType {
-    pub const fn apply(&self, lhs: isize, rhs: isize) -> isize {
+    #[allow(clippy::cast_sign_loss)]
+    pub fn apply(&self, lhs: isize, rhs: isize) -> isize {
         match self {
             Self::Add => lhs + rhs,
             Self::Div => lhs / rhs,
             Self::Sub => lhs - rhs,
             Self::Mul => lhs * rhs,
+            Self::Pow => lhs.pow(u32::try_from(rhs).unwrap()),
         }
     }
 }
@@ -55,6 +60,7 @@ impl FromStr for OperatorType {
             "-" => Ok(Self::Sub),
             "/" => Ok(Self::Div),
             "*" => Ok(Self::Mul),
+            "^" => Ok(Self::Pow),
             _ => Err(MathEquationErr::InvalidOperatorType(s.to_string())),
         }
     }
@@ -145,14 +151,11 @@ mod tests {
 
     #[test]
     fn test_operator_from_str() {
-        let div = "/";
-        let mul = "*";
-        let sub = "-";
-        let add = "+";
-        assert_eq!(div.parse::<OperatorType>().unwrap(), OperatorType::Div);
-        assert_eq!(mul.parse::<OperatorType>().unwrap(), OperatorType::Mul);
-        assert_eq!(sub.parse::<OperatorType>().unwrap(), OperatorType::Sub);
-        assert_eq!(add.parse::<OperatorType>().unwrap(), OperatorType::Add);
+        assert_eq!("/".parse::<OperatorType>().unwrap(), OperatorType::Div);
+        assert_eq!("*".parse::<OperatorType>().unwrap(), OperatorType::Mul);
+        assert_eq!("-".parse::<OperatorType>().unwrap(), OperatorType::Sub);
+        assert_eq!("+".parse::<OperatorType>().unwrap(), OperatorType::Add);
+        assert_eq!("^".parse::<OperatorType>().unwrap(), OperatorType::Pow);
     }
     #[test]
     fn test_fail_operator_from_str() {
@@ -160,29 +163,29 @@ mod tests {
     }
     #[test]
     fn test_mathtoken_from_str() {
-        let div = "/";
-        let mul = "*";
-        let sub = "-";
-        let add = "+";
         assert_eq!(
-            div.parse::<MathToken>().unwrap(),
+            "/".parse::<MathToken>().unwrap(),
             MathToken::Operator(OperatorType::Div)
         );
         assert_eq!(
-            mul.parse::<MathToken>().unwrap(),
+            "*".parse::<MathToken>().unwrap(),
             MathToken::Operator(OperatorType::Mul)
         );
         assert_eq!(
-            sub.parse::<MathToken>().unwrap(),
+            "-".parse::<MathToken>().unwrap(),
             MathToken::Operator(OperatorType::Sub)
         );
         assert_eq!(
-            add.parse::<MathToken>().unwrap(),
+            "+".parse::<MathToken>().unwrap(),
             MathToken::Operator(OperatorType::Add)
         );
         assert_eq!(
             "10".parse::<MathToken>().unwrap(),
             MathToken::IntOperand(10)
+        );
+        assert_eq!(
+            "^".parse::<MathToken>().unwrap(),
+            MathToken::Operator(OperatorType::Pow)
         );
     }
     #[test]
@@ -217,6 +220,18 @@ mod tests {
                 MathToken::Parens(false),
                 MathToken::Operator(OperatorType::Mul),
                 MathToken::IntOperand(2),
+            ])
+        );
+    }
+    #[test]
+    fn test_expression_power() {
+        let input = "3 ^ 4";
+        assert_eq!(
+            input.parse::<Expression>().unwrap(),
+            Expression::new(vec![
+                MathToken::IntOperand(3),
+                MathToken::Operator(OperatorType::Pow),
+                MathToken::IntOperand(4)
             ])
         );
     }
