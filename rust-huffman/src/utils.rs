@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Write, fs, path::PathBuf};
 
+#[allow(dead_code)]
 pub fn write_huffman_header(
     mapping: &HashMap<char, String>,
     file_path: String,
