@@ -1,0 +1,12 @@
+[package]
+name = "rust-huffman"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.16", features = ["derive"] }
+thiserror = "1.0.63"
+
+[[bin]]
+name = "oxhuff"
+path = "src/main.rs"
