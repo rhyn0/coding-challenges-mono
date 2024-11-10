@@ -1,112 +1,74 @@
 use std::{
-    cmp::Ordering,
-    collections::{BinaryHeap, HashMap, VecDeque},
+    collections::HashMap,
+    io::{self, BufRead},
 };
+use thiserror::Error;
 
-#[derive(Debug)]
-pub struct HuffmanTree {
-    /// Frequency counts of each char
-    counts: HashMap<char, usize>,
+#[derive(Default)]
+pub struct EncodingResult {
+    pub data: Vec<u8>,
+    pub padding: Option<u8>,
 }
-impl HuffmanTree {
-    pub const fn new(counts: HashMap<char, usize>) -> Self {
-        Self { counts }
+
+impl EncodingResult {
+    pub fn new() -> Self {
+        Self::default()
     }
-    fn build_tree(&self) -> HuffmanNode {
-        let mut min_heap: BinaryHeap<HuffmanNode> = self
-            .counts
-            .iter()
-            .map(|(k, v)| HuffmanNode::Leaf(*k, *v))
-            .collect();
-        while min_heap.len() > 1 {
-            let left = min_heap.pop().unwrap();
-            let right = min_heap.pop().unwrap();
-            min_heap.push(HuffmanNode::Internal(
-                left.get_weight() + right.get_weight(),
-                Box::new(left),
-                Box::new(right),
-            ));
-        }
-        min_heap.pop().unwrap()
-    }
-    pub fn get_huffman_codes(&self) -> HashMap<char, String> {
-        let root = self.build_tree();
-        let mut result = HashMap::new();
-        // use BFS to touch every node iteratively and add their code
-        let mut queue: VecDeque<(HuffmanNode, String)> = VecDeque::new();
-        queue.push_back((root, String::new()));
-        while !queue.is_empty() {
-            let (node, mut prefix) = queue.pop_front().unwrap();
-            match node {
-                HuffmanNode::Leaf(c, _) => {
-                    result.insert(c, prefix);
+}
+
+#[derive(Error, Debug)]
+pub enum EncodingError {
+    #[error("Unknown character for encoding '{0:?}'")]
+    UnknownCharacter(char),
+    #[error("Error reading from input file")]
+    FailedRead(#[from] io::Error),
+}
+
+pub fn encode<R>(
+    mut reader: R,
+    mapping: &HashMap<char, String>,
+) -> Result<EncodingResult, EncodingError>
+where
+    R: BufRead,
+{
+    let mut buffer = String::new();
+    let _ = reader.read_to_string(&mut buffer)?;
+    let mut output = EncodingResult::new();
+    let mut current_byte = 0u8;
+    let mut remaining_bits = 8u8;
+    for c in buffer.chars() {
+        if let Some(code) = mapping.get(&c) {
+            for bit in code.chars() {
+                let bit_value = u8::from(bit == '1');
+                current_byte = (current_byte << 1) | bit_value;
+
+                remaining_bits -= 1;
+
+                // If current_byte is full, push it to encoded data and reinitialize our monitors
+                if remaining_bits == 0 {
+                    output.data.push(current_byte);
+                    current_byte = 0;
+                    remaining_bits = 8;
                 }
-                HuffmanNode::Internal(_, left, right) => {
-                    let mut left_prefix = prefix.clone();
-                    left_prefix.push('0');
-                    prefix.push('1');
-                    queue.push_back((*left, left_prefix));
-                    queue.push_back((*right, prefix));
-                }
             }
-        }
-
-        result
-    }
-}
-
-#[derive(Debug, Eq)]
-enum HuffmanNode {
-    /// leaf node that corresponds to actual character
-    Leaf(char, usize),
-    /// internal node for determining prefix encoding bit
-    Internal(usize, Box<HuffmanNode>, Box<HuffmanNode>),
-}
-impl PartialEq for HuffmanNode {
-    fn eq(&self, other: &Self) -> bool {
-        match (&self, &other) {
-            (&Self::Leaf(c1, weight1), &Self::Leaf(c2, weight2)) => c1 == c2 && weight1 == weight2,
-            (&Self::Internal(weight1, left1, right1), &Self::Internal(weight2, left2, right2)) => {
-                weight1 == weight2 && left1 == left2 && right1 == right2
-            }
-            _ => false,
+        } else {
+            return Err(EncodingError::UnknownCharacter(c));
         }
     }
-}
-
-impl Ord for HuffmanNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let self_weight = self.get_weight();
-        let other_weight = other.get_weight();
-        // reverse comparison to implement a MinHeap
-        other_weight.cmp(&self_weight).then_with(|| {
-            match (&self, &other) {
-                (&Self::Leaf(_, _), &Self::Leaf(_, _))
-                | (&Self::Internal(_, _, _), &Self::Internal(_, _, _)) => Ordering::Equal,
-                // internal nodes should be later than Leaf IF equal weight
-                (&Self::Internal(_, _, _), _) => Ordering::Less,
-                (_, &Self::Internal(_, _, _)) => Ordering::Greater,
-            }
-        })
+    if remaining_bits > 0 {
+        output.data.push(current_byte);
     }
-}
-impl PartialOrd for HuffmanNode {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl HuffmanNode {
-    const fn get_weight(&self) -> usize {
-        match self {
-            Self::Leaf(_, weight) | Self::Internal(weight, _, _) => *weight,
-        }
-    }
+    output.padding = Some(remaining_bits);
+    Ok(output)
 }
 
 #[cfg(test)]
 mod tests {
+    use io::Write;
+
     use super::*;
+    use crate::huffman::HuffmanTree;
+    use std::fs::{File, OpenOptions};
 
     #[test]
     fn test_encodings() {
@@ -119,6 +81,48 @@ mod tests {
                 ('a', "0".to_string()),
                 ('b', "11".to_string()),
                 ('c', "10".to_string()),
+            ])
+        );
+    }
+    #[test]
+    fn test_encode_bit_string() {
+        let expected = "aaabbc";
+        let counts = HashMap::from_iter([('a', 3), ('b', 2), ('c', 1)]);
+        let huffman_codes = HuffmanTree::new(counts.clone()).get_huffman_codes();
+        let encoded = encode(std::io::Cursor::new(expected), &huffman_codes).unwrap();
+        assert_eq!(encoded.data, vec![0b00011111, 0b00000000,]);
+    }
+    #[test]
+    fn test_consistent_leaf_codes() {
+        // make sure that the codes generated are repeatable and have one solution.
+        // this specifically makes sure that leafs ordering is consistent
+        // input has 2 leafs of the same frequency which need to be consistent
+        let counts = HashMap::from_iter([('a', 5), ('b', 5), ('c', 10), ('d', 20)]);
+        let huffman_codes = HuffmanTree::new(counts.clone()).get_huffman_codes();
+        assert_eq!(
+            huffman_codes,
+            HashMap::from_iter([
+                ('a', "110".to_string()),
+                ('b', "111".to_string()),
+                ('c', "10".to_string()),
+                ('d', "0".to_string()),
+            ])
+        );
+    }
+    #[test]
+    fn test_consistent_internal_codes() {
+        // make sure that the codes generated are repeatable and have one solution.
+        // this specifically makes sure that internal node ordering is consistent
+        // input will create two internal nodes of same weight that must be equal
+        let counts = HashMap::from_iter([('a', 5), ('b', 5), ('c', 5), ('d', 5)]);
+        let huffman_codes = HuffmanTree::new(counts.clone()).get_huffman_codes();
+        assert_eq!(
+            huffman_codes,
+            HashMap::from_iter([
+                ('a', "00".to_string()),
+                ('b', "01".to_string()),
+                ('c', "10".to_string()),
+                ('d', "11".to_string()),
             ])
         );
     }

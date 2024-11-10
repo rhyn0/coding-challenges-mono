@@ -1,5 +1,3 @@
-use std::ffi::OsString;
-
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -7,9 +5,6 @@ use clap::{Parser, Subcommand};
 pub struct Cli {
     #[arg(long, short, action = clap::ArgAction::Count)]
     pub debug: u8,
-
-    #[arg(long, short = 'f')]
-    pub header_file: OsString,
 
     #[command(subcommand)]
     pub command: Commands,
@@ -20,12 +15,16 @@ pub enum Commands {
     /// encode the given data file
     Encode {
         /// file to encode
-        file: OsString,
+        input_file: String,
+        /// file path to write encoded to
+        output_file: String,
     },
     /// Decode given files
     Decode {
         /// file to decode
-        file: OsString,
+        input_file: String,
+        /// file path to write decoded to
+        output_file: String,
     },
 }
 
@@ -43,13 +42,13 @@ mod tests {
     #[test]
     fn test_example_decode() {
         let args = Cli::parse_from(
-            "oxhuff --header-file ./test.hout decode static/les-mis.txt".split_ascii_whitespace(),
+            "oxhuff decode les-mis.encoded.txt static/result/les-mis.txt".split_ascii_whitespace(),
         );
-        assert_eq!(args.header_file, "./test.hout");
         assert_eq!(
             args.command,
             Commands::Decode {
-                file: "static/les-mis.txt".into()
+                input_file: "les-mis.encoded.txt".into(),
+                output_file: "static/les-mis.txt".into(),
             }
         );
     }
@@ -57,13 +56,13 @@ mod tests {
     #[test]
     fn test_example_encode() {
         let args = Cli::parse_from(
-            "oxhuff --header-file ./test.hout encode static/les-mis.txt".split_ascii_whitespace(),
+            "oxhuff encode static/les-mis.txt les-mis.encoded.txt".split_ascii_whitespace(),
         );
-        assert_eq!(args.header_file, "./test.hout");
         assert_eq!(
             args.command,
             Commands::Encode {
-                file: "static/les-mis.txt".into()
+                input_file: "static/les-mis.txt".into(),
+                output_file: "les-mis.encoded.txt".into()
             }
         );
     }

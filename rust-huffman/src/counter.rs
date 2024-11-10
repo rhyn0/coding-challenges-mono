@@ -21,7 +21,7 @@ impl<R: BufRead> Characters<R> {
                 .insert(c, *self.counted.get(&c).unwrap_or(&0_usize) + 1);
         });
     }
-    pub fn read_all(&mut self) -> std::io::Result<()> {
+    pub fn read_all(&mut self) -> std::io::Result<HashMap<char, usize>> {
         let mut buffer = String::new();
         loop {
             match self.reader.read_line(&mut buffer) {
@@ -33,7 +33,7 @@ impl<R: BufRead> Characters<R> {
                 Err(e) => return Err(e),
             }
         }
-        Ok(())
+        Ok(self.counted.clone())
     }
 }
 

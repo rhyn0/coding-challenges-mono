@@ -1572,6 +1572,7 @@ name = "rust-huffman"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "thiserror",
 ]
 
 [[package]]
