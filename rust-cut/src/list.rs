@@ -12,11 +12,11 @@ pub enum CutRange {
     Closed(RangeInclusive<usize>),
 }
 
-trait CutList {
+pub trait CutSelector {
     fn is_selected(&self, field: usize) -> bool;
 }
 
-impl CutList for CutRange {
+impl CutSelector for CutRange {
     fn is_selected(&self, field: usize) -> bool {
         match &self {
             Self::Single(x) => *x == field,
@@ -34,6 +34,27 @@ pub enum CutRangeStrError {
     IllegalListValue,
 }
 
+/// Helpers for testing
+impl From<usize> for CutRange {
+    /// This could break other things if we pass in `0`
+    fn from(value: usize) -> Self {
+        Self::Single(value)
+    }
+}
+impl From<RangeFrom<usize>> for CutRange {
+    /// This could break other things if we pass in `0..`
+    fn from(value: RangeFrom<usize>) -> Self {
+        Self::OpenEnd(value)
+    }
+}
+impl From<RangeInclusive<usize>> for CutRange {
+    /// This could break other things if we pass in `0..=1`
+    fn from(value: RangeInclusive<usize>) -> Self {
+        Self::Closed(value)
+    }
+}
+
+/// Important Argument parsing logic
 impl FromStr for CutRange {
     type Err = CutRangeStrError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -153,5 +174,12 @@ mod tests {
     fn test_valid_open() {
         assert!(CutRange::from_str("1-").is_ok_and(|x| x == CutRange::OpenEnd(1..)));
         assert!(CutRange::from_str("10-").is_ok_and(|x| x == CutRange::OpenEnd(10..)));
+    }
+    #[test]
+    fn test_is_selected() {
+        let contained = 2usize;
+        assert!(CutRange::from(2).is_selected(contained));
+        assert!(CutRange::from(2..).is_selected(contained));
+        assert!(CutRange::from(1..=2).is_selected(contained));
     }
 }
