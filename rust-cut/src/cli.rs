@@ -18,6 +18,10 @@ pub struct Cli {
     #[arg(long)]
     pub complement: bool,
 
+    /// do not print lines not containing delimiters
+    #[arg(short = 's', long)]
+    pub only_delimited: bool,
+
     /// Files to read from.
     pub files: Vec<String>,
 
