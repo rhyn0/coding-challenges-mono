@@ -14,6 +14,7 @@ fn handle_field_fields<F, W: Write>(
     reader: &mut Box<dyn BufRead>,
     writer: &mut W,
     delimiter: char,
+    suppress_non_delimited: bool,
     selector: F,
 ) -> io::Result<()>
 where
@@ -32,7 +33,11 @@ where
             // if first field and the partition is a full line
             // print it as is
             if field_idx == 0 && part.ends_with('\n') {
-                write!(writer, "{part}")?;
+                if suppress_non_delimited {
+                    // do nothing
+                } else {
+                    write!(writer, "{part}")?;
+                }
                 break;
             } else if selector(field_idx + 1) {
                 if prev_selected_field {
@@ -112,35 +117,39 @@ where
 }
 
 /// Verify that a valid command was passed in.
-/// Also cause logging side effects
-fn verify_args(cli: &cli::Cli) {
-    match cli.verbose {
-        0 => Builder::new().filter_level(LevelFilter::Error).init(),
-        1 => Builder::new().filter_level(LevelFilter::Warn).init(),
-        2 => Builder::new().filter_level(LevelFilter::Info).init(),
-        3.. => Builder::new().filter_level(LevelFilter::max()).init(),
-    };
+fn verify_args(cli: &cli::Cli) -> Result<(), String> {
     match (
         cli.selectors.bytes.is_some() || cli.selectors.characters.is_some(),
         cli.delimiter,
+        cli.only_delimited,
     ) {
-        (true, '\t') => {}
-        (true, _) => {
-            let mut cmd = cli::Cli::command();
-            cmd.error(
-                ClapErrorKind::ArgumentConflict,
-                "An input delimiter may only be specified only when operating on fields",
-            )
-            .exit();
-        }
-        _ => {}
+        (true, '\t', false) => Ok(()),
+        (true, '\t', true) => Err(
+            "Suppressing non-delimited lines makes sense only when operating on fields".to_string(),
+        ),
+        (true, _, _) => Err(
+            "An input delimiter may only be specified only when operating on fields".to_string(),
+        ),
+        _ => Ok(()),
     }
 }
 
 type OutputHandlerT = dyn FnMut(&mut Box<dyn BufRead>) -> io::Result<()>;
 fn main() {
     let mut cli = cli::Cli::parse();
-    verify_args(&cli);
+    match cli.verbose {
+        0 => Builder::new().filter_level(LevelFilter::Error).init(),
+        1 => Builder::new().filter_level(LevelFilter::Warn).init(),
+        2 => Builder::new().filter_level(LevelFilter::Info).init(),
+        3.. => Builder::new().filter_level(LevelFilter::max()).init(),
+    };
+    match verify_args(&cli) {
+        Ok(()) => {}
+        Err(msg) => {
+            let mut cmd = cli::Cli::command();
+            cmd.error(ClapErrorKind::ArgumentConflict, msg).exit();
+        }
+    }
     let stdout = io::stdout();
     let handle = stdout.lock();
     let mut writer = io::BufWriter::new(handle);
@@ -155,9 +164,13 @@ fn main() {
     } else if let Some(field_sel) = cli.selectors.fields {
         debug!("Using fields selectors");
         Box::new(move |reader| {
-            handle_field_fields(reader, &mut writer, cli.delimiter, |val| {
-                field_sel.is_selected(val) != cli.complement
-            })
+            handle_field_fields(
+                reader,
+                &mut writer,
+                cli.delimiter,
+                cli.only_delimited,
+                |val| field_sel.is_selected(val) != cli.complement,
+            )
         })
     } else {
         let char_sel = cli.selectors.characters.unwrap();
@@ -204,5 +217,30 @@ mod tests {
     #[allow(dead_code)]
     fn get_reader(value: String) -> BufReader<Cursor<String>> {
         BufReader::new(Cursor::new(value))
+    }
+
+    #[test]
+    fn test_byte_suppress_delimited() {
+        let args = cli::Cli::parse_from("oxcut -b1 -s -".split_whitespace());
+        let result = verify_args(&args);
+        assert!(result.is_err_and(|msg| msg.starts_with("Suppressing")));
+    }
+    #[test]
+    fn test_byte_input_delimiter() {
+        let args = cli::Cli::parse_from("oxcut -b1 -d: -".split_whitespace());
+        let result = verify_args(&args);
+        assert!(result.is_err_and(|msg| msg.starts_with("An input")));
+    }
+    #[test]
+    fn test_char_suppress_delimited() {
+        let args = cli::Cli::parse_from("oxcut -c1 -s -".split_whitespace());
+        let result = verify_args(&args);
+        assert!(result.is_err_and(|msg| msg.starts_with("Suppressing")));
+    }
+    #[test]
+    fn test_char_input_delimiter() {
+        let args = cli::Cli::parse_from("oxcut -c1 -d: -".split_whitespace());
+        let result = verify_args(&args);
+        assert!(result.is_err_and(|msg| msg.starts_with("An input")));
     }
 }
