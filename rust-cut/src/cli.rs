@@ -22,6 +22,12 @@ pub struct Cli {
     #[arg(short = 's', long)]
     pub only_delimited: bool,
 
+    /// use STRING as the output delimiter the default is to use
+    /// the input delimiter
+    /// Only has an effect on selecting fields - not an error to specify otherwise.
+    #[arg(long)]
+    pub output_delimiter: Option<String>,
+
     /// Files to read from.
     pub files: Vec<String>,
 
