@@ -10,7 +10,10 @@ use std::{
 use env_logger::Builder;
 use log::{debug, info, LevelFilter};
 
-fn handle_file_fields(reader: &mut Box<dyn BufRead>, delimiter: char, selectors: &range::CutList) {
+fn handle_file_fields<F>(reader: &mut Box<dyn BufRead>, delimiter: char, selector: F)
+where
+    F: Fn(usize) -> bool,
+{
     let mut buffer = String::new();
     let mut prev_selected_field = false;
     while let Ok(read_len) = reader.read_line(&mut buffer) {
@@ -26,7 +29,7 @@ fn handle_file_fields(reader: &mut Box<dyn BufRead>, delimiter: char, selectors:
             if field_idx == 0 && part.ends_with('\n') {
                 print!("{part}");
                 break;
-            } else if selectors.is_selected(field_idx + 1) {
+            } else if selector(field_idx + 1) {
                 if prev_selected_field {
                     print!("{delimiter}");
                 }
@@ -40,7 +43,10 @@ fn handle_file_fields(reader: &mut Box<dyn BufRead>, delimiter: char, selectors:
     }
 }
 
-fn handle_byte_fields(reader: &mut Box<dyn BufRead>, selectors: &range::CutList) {
+fn handle_byte_fields<F>(reader: &mut Box<dyn BufRead>, selector: F)
+where
+    F: Fn(usize) -> bool,
+{
     let mut buffer = String::new();
     let stdout = io::stdout();
     while let Ok(read_len) = reader.read_line(&mut buffer) {
@@ -55,7 +61,7 @@ fn handle_byte_fields(reader: &mut Box<dyn BufRead>, selectors: &range::CutList)
             // print it as is
             if part == b'\n' {
                 println!();
-            } else if selectors.is_selected(field_idx + 1) {
+            } else if selector(field_idx + 1) {
                 let mut handle = stdout.lock();
                 let _ = handle.write(&[part]);
             }
@@ -64,7 +70,11 @@ fn handle_byte_fields(reader: &mut Box<dyn BufRead>, selectors: &range::CutList)
         buffer.clear();
     }
 }
-fn handle_char_fields(reader: &mut Box<dyn BufRead>, selectors: &range::CutList) {
+
+fn handle_char_fields<F>(reader: &mut Box<dyn BufRead>, selector: F)
+where
+    F: Fn(usize) -> bool,
+{
     let mut buffer = String::new();
     while let Ok(read_len) = reader.read_line(&mut buffer) {
         if read_len == 0 {
@@ -78,7 +88,7 @@ fn handle_char_fields(reader: &mut Box<dyn BufRead>, selectors: &range::CutList)
             // print it as is
             if part == '\n' {
                 println!();
-            } else if selectors.is_selected(field_idx + 1) {
+            } else if selector(field_idx + 1) {
                 print!("{part}");
             }
         }
@@ -124,22 +134,28 @@ fn main() {
             Box::new(BufReader::new(f))
         };
         if !fields_selector.is_empty() {
-            handle_file_fields(&mut reader, cli.delimiter, &fields_selector);
+            handle_file_fields(&mut reader, cli.delimiter, |val: usize| {
+                fields_selector.is_selected(val) != cli.complement
+            });
         } else if !bytes_selector.is_empty() {
-            handle_byte_fields(&mut reader, &bytes_selector);
+            handle_byte_fields(&mut reader, |val: usize| {
+                bytes_selector.is_selected(val) != cli.complement
+            });
         } else {
-            handle_char_fields(&mut reader, &char_selectors);
+            handle_char_fields(&mut reader, |val: usize| {
+                char_selectors.is_selected(val) != cli.complement
+            });
         };
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::io::Cursor;
 
-    #[test]
-    fn test_multibyte_chars() {
-        let multibyte_char = '𐍈'; // Declare the character
-        let utf8_bytes = multibyte_char.to_string().into_bytes();
-        assert_eq!(utf8_bytes.len(), 4);
+    #[allow(dead_code)]
+    fn get_reader(value: String) -> BufReader<Cursor<String>> {
+        BufReader::new(Cursor::new(value))
     }
 }
