@@ -4,7 +4,7 @@ use clap::Parser;
 use range::Selector;
 use std::{
     fs::File,
-    io::{self, BufRead, BufReader, ErrorKind},
+    io::{self, BufRead, BufReader, ErrorKind, Write},
 };
 
 use env_logger::Builder;
@@ -42,6 +42,30 @@ fn handle_file_fields(reader: &mut Box<dyn BufRead>, delimiter: char, selectors:
 
 fn handle_byte_fields(reader: &mut Box<dyn BufRead>, selectors: &range::CutList) {
     let mut buffer = String::new();
+    let stdout = io::stdout();
+    while let Ok(read_len) = reader.read_line(&mut buffer) {
+        if read_len == 0 {
+            // EOF
+            info!("Hit EOF condition for");
+            break;
+        }
+        for (field_idx, part) in buffer.bytes().enumerate() {
+            debug!("Checking if index '{field_idx}' is selected with data {part}");
+            // if first field and the partition is a full line
+            // print it as is
+            if part == b'\n' {
+                println!();
+            } else if selectors.is_selected(field_idx + 1) {
+                let mut handle = stdout.lock();
+                let _ = handle.write(&[part]);
+            }
+        }
+        println!();
+        buffer.clear();
+    }
+}
+fn handle_char_fields(reader: &mut Box<dyn BufRead>, selectors: &range::CutList) {
+    let mut buffer = String::new();
     while let Ok(read_len) = reader.read_line(&mut buffer) {
         if read_len == 0 {
             // EOF
@@ -73,9 +97,10 @@ fn main() {
     };
     let bytes_selector = cli.selectors.bytes.unwrap_or_default();
     let fields_selector = cli.selectors.fields.unwrap_or_default();
+    let char_selectors = cli.selectors.characters.unwrap_or_default();
     debug!(
-        "Selectors are bytes {0:?} or fields {1:?}",
-        bytes_selector, fields_selector,
+        "Selectors are bytes {0:?} or fields {1:?} or characters {2:?}",
+        bytes_selector, fields_selector, char_selectors,
     );
     if cli.files.is_empty() {
         cli.files.push("-".to_string());
@@ -98,12 +123,23 @@ fn main() {
             };
             Box::new(BufReader::new(f))
         };
-        if fields_selector.is_empty() {
-            // if fields isnt set, then use bytes
+        if !fields_selector.is_empty() {
+            handle_file_fields(&mut reader, cli.delimiter, &fields_selector);
+        } else if !bytes_selector.is_empty() {
             handle_byte_fields(&mut reader, &bytes_selector);
         } else {
-            // if fields is set, then use fields
-            handle_file_fields(&mut reader, cli.delimiter, &fields_selector);
+            handle_char_fields(&mut reader, &char_selectors);
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_multibyte_chars() {
+        let multibyte_char = '𐍈'; // Declare the character
+        let utf8_bytes = multibyte_char.to_string().into_bytes();
+        assert_eq!(utf8_bytes.len(), 4);
     }
 }

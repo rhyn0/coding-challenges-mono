@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use clap::{Args, Parser};
 
-use crate::range::{self, CutList};
+use crate::range::CutList;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -25,12 +25,15 @@ pub struct Cli {
 #[group(required = true, multiple = false)]
 pub struct Selectors {
     /// Select only these bytes.
-    #[arg(long, short, value_parser = range::CutList::from_str)]
+    #[arg(long, short, value_parser = CutList::from_str)]
     pub bytes: Option<CutList>,
+    /// select only these characters
+    #[arg(long, short, value_parser = CutList::from_str)]
+    pub characters: Option<CutList>,
     ///  select only these fields;  also print any line that
     /// contains no delimiter character, unless the -s option is
     /// specified
-    #[arg(long, short, value_parser = range::CutList::from_str)]
+    #[arg(long, short, value_parser = CutList::from_str)]
     pub fields: Option<CutList>,
 }
 
@@ -56,7 +59,7 @@ mod tests {
         assert_eq!(byte_selector.len(), 1);
         assert_eq!(
             byte_selector,
-            range::CutList::new(vec![cut::CutRange::from(1usize)])
+            CutList::new(vec![cut::CutRange::from(1usize)])
         );
     }
     #[test]
