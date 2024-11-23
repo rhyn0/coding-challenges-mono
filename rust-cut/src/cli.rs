@@ -42,6 +42,7 @@ mod tests {
     use clap::CommandFactory;
 
     use super::*;
+    use crate::range::cut;
 
     #[test]
     fn test_cli() {
@@ -55,7 +56,7 @@ mod tests {
         assert_eq!(byte_selector.len(), 1);
         assert_eq!(
             byte_selector,
-            range::CutList::new(vec![range::CutRange::from(1usize)])
+            range::CutList::new(vec![cut::CutRange::from(1usize)])
         );
     }
     #[test]

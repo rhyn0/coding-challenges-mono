@@ -1,4 +1,4 @@
-mod cut;
+pub mod cut;
 mod list;
 
 pub use cut::Selector;
