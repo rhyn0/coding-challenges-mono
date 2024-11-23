@@ -16,24 +16,27 @@ fn handle_field_fields<F, W: Write>(
     delimiter: char,
     output_delimiter: &str,
     suppress_non_delimited: bool,
+    line_delim: char,
     selector: F,
 ) -> io::Result<()>
 where
     F: Fn(usize) -> bool,
 {
-    let mut buffer = String::new();
+    let mut buffer = Vec::new();
     let mut prev_selected_field = false;
-    while let Ok(read_len) = reader.read_line(&mut buffer) {
+    while let Ok(read_len) = reader.read_until(line_delim as u8, &mut buffer) {
         if read_len == 0 {
             // EOF
             info!("Hit EOF condition for");
             break;
         }
-        for (field_idx, part) in buffer.split(delimiter).enumerate() {
+        let buffer_string = String::from_utf8(buffer.clone())
+            .expect("valid utf8 strings delimited by {line_delim}");
+        for (field_idx, part) in buffer_string.split(delimiter).enumerate() {
             debug!("Checking if index '{field_idx}' is selected with data {part}");
             // if first field and the partition is a full line
             // print it as is
-            if field_idx == 0 && part.ends_with('\n') {
+            if field_idx == 0 && part.ends_with(line_delim) {
                 if suppress_non_delimited {
                     // do nothing
                 } else {
@@ -48,7 +51,7 @@ where
                 write!(writer, "{part}")?;
             }
         }
-        writeln!(writer)?;
+        write!(writer, "{line_delim}")?;
         buffer.clear();
         prev_selected_field = false;
     }
@@ -58,6 +61,7 @@ where
 fn handle_byte_fields<F, W: Write>(
     reader: &mut Box<dyn BufRead>,
     writer: &mut W,
+    line_delim: char,
     selector: F,
 ) -> io::Result<()>
 where
@@ -74,13 +78,13 @@ where
             debug!("Checking if index '{field_idx}' is selected with data {part}");
             // if first field and the partition is a full line
             // print it as is
-            if part == b'\n' {
-                writeln!(writer)?;
+            if part == line_delim as u8 {
+                write!(writer, "{line_delim}")?;
             } else if selector(field_idx + 1) {
                 write!(writer, "{}", part as char)?;
             }
         }
-        writeln!(writer)?;
+        write!(writer, "{line_delim}")?;
         buffer.clear();
     }
     Ok(())
@@ -89,6 +93,7 @@ where
 fn handle_char_fields<F, W: Write>(
     reader: &mut Box<dyn BufRead>,
     writer: &mut W,
+    line_delim: char,
     selector: F,
 ) -> io::Result<()>
 where
@@ -105,13 +110,13 @@ where
             debug!("Checking if index '{field_idx}' is selected with data {part}");
             // if first field and the partition is a full line
             // print it as is
-            if part == '\n' {
-                writeln!(writer)?;
+            if part == line_delim {
+                write!(writer, "{line_delim}")?;
             } else if selector(field_idx + 1) {
                 write!(writer, "{part}")?;
             }
         }
-        writeln!(writer)?;
+        write!(writer, "{line_delim}")?;
         buffer.clear();
     }
     Ok(())
@@ -166,6 +171,7 @@ fn main() {
         }
     }
     let delimiter = determine_output_delimiter(&cli);
+    let line_delimiter = if cli.zero_terminated { '\0' } else { '\n' };
     let stdout = io::stdout();
     let handle = stdout.lock();
     let mut writer = io::BufWriter::new(handle);
@@ -173,7 +179,7 @@ fn main() {
     let mut cut_func: Box<OutputHandlerT> = if let Some(byte_sel) = cli.selectors.bytes.clone() {
         debug!("Using bytes selectors");
         Box::new(move |reader| {
-            handle_byte_fields(reader, &mut writer, |val| {
+            handle_byte_fields(reader, &mut writer, line_delimiter, |val| {
                 byte_sel.is_selected(val) != cli.complement
             })
         })
@@ -186,6 +192,7 @@ fn main() {
                 cli.delimiter,
                 &delimiter,
                 cli.only_delimited,
+                line_delimiter,
                 |val| field_sel.is_selected(val) != cli.complement,
             )
         })
@@ -193,7 +200,7 @@ fn main() {
         let char_sel = cli.selectors.characters.unwrap();
         debug!("Using character selectors");
         Box::new(move |reader| {
-            handle_char_fields(reader, &mut writer, |val| {
+            handle_char_fields(reader, &mut writer, line_delimiter, |val| {
                 char_sel.is_selected(val) != cli.complement
             })
         })
