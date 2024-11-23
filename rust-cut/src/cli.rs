@@ -14,6 +14,10 @@ pub struct Cli {
     #[arg(long, short, default_value_t = '\t')]
     pub delimiter: char,
 
+    /// complement the set of selected bytes, characters or fields
+    #[arg(long)]
+    pub complement: bool,
+
     /// Files to read from.
     pub files: Vec<String>,
 
