@@ -1,6 +1,6 @@
 mod cli;
 mod range;
-use clap::Parser;
+use clap::{error::ErrorKind as ClapErrorKind, CommandFactory, Parser};
 use range::Selector;
 use std::{
     fs::File,
@@ -71,7 +71,7 @@ where
             if part == b'\n' {
                 writeln!(writer)?;
             } else if selector(field_idx + 1) {
-                write!(writer, "{part}")?;
+                write!(writer, "{}", part as char)?;
             }
         }
         writeln!(writer)?;
@@ -110,17 +110,37 @@ where
     }
     Ok(())
 }
-type OutputHandlerT = dyn FnMut(&mut Box<dyn BufRead>) -> io::Result<()>;
 
-fn main() {
-    let mut cli = cli::Cli::parse();
+/// Verify that a valid command was passed in.
+/// Also cause logging side effects
+fn verify_args(cli: &cli::Cli) {
     match cli.verbose {
         0 => Builder::new().filter_level(LevelFilter::Error).init(),
         1 => Builder::new().filter_level(LevelFilter::Warn).init(),
         2 => Builder::new().filter_level(LevelFilter::Info).init(),
         3.. => Builder::new().filter_level(LevelFilter::max()).init(),
     };
+    match (
+        cli.selectors.bytes.is_some() || cli.selectors.characters.is_some(),
+        cli.delimiter,
+    ) {
+        (true, '\t') => {}
+        (true, _) => {
+            let mut cmd = cli::Cli::command();
+            cmd.error(
+                ClapErrorKind::ArgumentConflict,
+                "An input delimiter may only be specified only when operating on fields",
+            )
+            .exit();
+        }
+        _ => {}
+    }
+}
 
+type OutputHandlerT = dyn FnMut(&mut Box<dyn BufRead>) -> io::Result<()>;
+fn main() {
+    let mut cli = cli::Cli::parse();
+    verify_args(&cli);
     let stdout = io::stdout();
     let handle = stdout.lock();
     let mut writer = io::BufWriter::new(handle);
