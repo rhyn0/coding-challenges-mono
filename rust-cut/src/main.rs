@@ -1,7 +1,7 @@
 mod cli;
-mod list;
+mod range;
 use clap::Parser;
-use list::CutSelector;
+use range::Selector;
 use std::{
     fs::File,
     io::{BufRead, BufReader, ErrorKind},
@@ -10,7 +10,7 @@ use std::{
 use env_logger::Builder;
 use log::{debug, info, LevelFilter};
 
-fn handle_file_fields(f: File, delimiter: char, selectors: &[list::CutRange]) {
+fn handle_file_fields(f: File, delimiter: char, selectors: &range::CutList) {
     let mut reader = BufReader::new(f);
     let mut buffer = String::new();
     let mut prev_selected_field = false;
@@ -27,7 +27,7 @@ fn handle_file_fields(f: File, delimiter: char, selectors: &[list::CutRange]) {
             if field_idx == 0 && part.ends_with('\n') {
                 print!("{part}");
                 break;
-            } else if selectors.iter().any(|sel| sel.is_selected(field_idx + 1)) {
+            } else if selectors.is_selected(field_idx + 1) {
                 if prev_selected_field {
                     print!("{delimiter}");
                 }
@@ -49,16 +49,18 @@ fn main() {
         2 => Builder::new().filter_level(LevelFilter::Info).init(),
         3.. => Builder::new().filter_level(LevelFilter::max()).init(),
     };
+    let bytes_selector = cli.selectors.bytes.unwrap_or_default();
+    let fields_selector = cli.selectors.fields.unwrap_or_default();
     debug!(
         "Selectors are bytes {0:?} or fields {1:?}",
-        cli.bytes, cli.fields
+        bytes_selector, fields_selector,
     );
     for filename in cli.files {
         debug!("Running for files  {filename}");
         match File::open(&filename) {
             Ok(f) => {
-                if cli.bytes.is_empty() {
-                    handle_file_fields(f, cli.delimiter, &cli.fields);
+                if bytes_selector.is_empty() {
+                    handle_file_fields(f, cli.delimiter, &fields_selector);
                 }
             }
             Err(e) => match e.kind() {

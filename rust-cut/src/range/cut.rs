@@ -6,17 +6,18 @@ use std::{
 use thiserror::Error as TIError;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::module_name_repetitions)]
 pub enum CutRange {
     Single(usize),
     OpenEnd(RangeFrom<usize>),
     Closed(RangeInclusive<usize>),
 }
 
-pub trait CutSelector {
+pub trait Selector {
     fn is_selected(&self, field: usize) -> bool;
 }
 
-impl CutSelector for CutRange {
+impl Selector for CutRange {
     fn is_selected(&self, field: usize) -> bool {
         match &self {
             Self::Single(x) => *x == field,
@@ -27,7 +28,7 @@ impl CutSelector for CutRange {
 }
 
 #[derive(Debug, TIError, PartialEq, Eq)]
-pub enum CutRangeStrError {
+pub enum ListCutStrError {
     #[error("values may not include zero")]
     ListMayNotIncludeZero,
     #[error("illegal list value")]
@@ -56,21 +57,21 @@ impl From<RangeInclusive<usize>> for CutRange {
 
 /// Important Argument parsing logic
 impl FromStr for CutRange {
-    type Err = CutRangeStrError;
+    type Err = ListCutStrError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // check that all values are valid. Numbers and `-`
         debug!("Started parsing Range from {s}");
         let hyphen_count = s.chars().fold(0, |acc, c| acc + usize::from(c == '-'));
         debug!("Input has {hyphen_count} hyphens");
         if !s.chars().all(|c| c.is_ascii_digit() || c == '-') || hyphen_count > 1 {
-            return Err(CutRangeStrError::IllegalListValue);
+            return Err(ListCutStrError::IllegalListValue);
         }
         if hyphen_count == 0 {
             // it is a singular field value
             match s.parse::<usize>() {
-                Ok(0) => Err(CutRangeStrError::ListMayNotIncludeZero),
+                Ok(0) => Err(ListCutStrError::ListMayNotIncludeZero),
                 Ok(x) => Ok(Self::Single(x)),
-                Err(_) => Err(CutRangeStrError::IllegalListValue),
+                Err(_) => Err(ListCutStrError::IllegalListValue),
             }
         } else if s.starts_with('-') {
             debug!("Determined range is implied first field inclusive.");
@@ -82,10 +83,10 @@ impl FromStr for CutRange {
                 .expect("To be a string after splitting.")
                 .parse::<usize>()
             {
-                Ok(0) => Err(CutRangeStrError::ListMayNotIncludeZero),
+                Ok(0) => Err(ListCutStrError::ListMayNotIncludeZero),
                 Ok(x) => Ok(Self::Closed(1..=x)),
                 // not a number
-                Err(_) => Err(CutRangeStrError::IllegalListValue),
+                Err(_) => Err(ListCutStrError::IllegalListValue),
             }
         } else {
             let mut parts = s.split('-');
@@ -94,10 +95,10 @@ impl FromStr for CutRange {
                 .expect("To be a string after splitting.")
                 .parse::<usize>()
             {
-                Ok(0) => return Err(CutRangeStrError::ListMayNotIncludeZero),
+                Ok(0) => return Err(ListCutStrError::ListMayNotIncludeZero),
                 Ok(x) => x,
                 // not a number
-                Err(_) => return Err(CutRangeStrError::IllegalListValue),
+                Err(_) => return Err(ListCutStrError::IllegalListValue),
             };
             debug!("Successfully parsed {front} as first field");
             let back = parts
@@ -109,9 +110,9 @@ impl FromStr for CutRange {
             } else {
                 // protected by above check
                 let back = match back.parse::<usize>() {
-                    Ok(0) => return Err(CutRangeStrError::ListMayNotIncludeZero),
+                    Ok(0) => return Err(ListCutStrError::ListMayNotIncludeZero),
                     Ok(x) => x,
-                    Err(_) => return Err(CutRangeStrError::IllegalListValue),
+                    Err(_) => return Err(ListCutStrError::IllegalListValue),
                 };
                 Ok(Self::Closed(front..=back))
             }
@@ -135,29 +136,27 @@ mod tests {
 
     #[test]
     fn test_illegal_list_val_errs() {
-        assert!(CutRange::from_str("1:2").is_err_and(|x| x == CutRangeStrError::IllegalListValue));
-        assert!(CutRange::from_str("a").is_err_and(|x| x == CutRangeStrError::IllegalListValue));
-        assert!(CutRange::from_str("1-b").is_err_and(|x| x == CutRangeStrError::IllegalListValue));
-        assert!(CutRange::from_str("a-").is_err_and(|x| x == CutRangeStrError::IllegalListValue));
-        assert!(CutRange::from_str("1--2").is_err_and(|x| x == CutRangeStrError::IllegalListValue));
-        assert!(CutRange::from_str("--2").is_err_and(|x| x == CutRangeStrError::IllegalListValue));
-        assert!(CutRange::from_str("--").is_err_and(|x| x == CutRangeStrError::IllegalListValue));
-        assert!(CutRange::from_str("-").is_err_and(|x| x == CutRangeStrError::IllegalListValue));
+        assert!(CutRange::from_str("1:2").is_err_and(|x| x == ListCutStrError::IllegalListValue));
+        assert!(CutRange::from_str("a").is_err_and(|x| x == ListCutStrError::IllegalListValue));
+        assert!(CutRange::from_str("1-b").is_err_and(|x| x == ListCutStrError::IllegalListValue));
+        assert!(CutRange::from_str("a-").is_err_and(|x| x == ListCutStrError::IllegalListValue));
+        assert!(CutRange::from_str("1--2").is_err_and(|x| x == ListCutStrError::IllegalListValue));
+        assert!(CutRange::from_str("--2").is_err_and(|x| x == ListCutStrError::IllegalListValue));
+        assert!(CutRange::from_str("--").is_err_and(|x| x == ListCutStrError::IllegalListValue));
+        assert!(CutRange::from_str("-").is_err_and(|x| x == ListCutStrError::IllegalListValue));
     }
     #[test]
     fn test_no_zeroes_allowed() {
         init_logger();
+        assert!(CutRange::from_str("0").is_err_and(|x| x == ListCutStrError::ListMayNotIncludeZero));
         assert!(
-            CutRange::from_str("0").is_err_and(|x| x == CutRangeStrError::ListMayNotIncludeZero)
+            CutRange::from_str("0-").is_err_and(|x| x == ListCutStrError::ListMayNotIncludeZero)
         );
         assert!(
-            CutRange::from_str("0-").is_err_and(|x| x == CutRangeStrError::ListMayNotIncludeZero)
+            CutRange::from_str("-0").is_err_and(|x| x == ListCutStrError::ListMayNotIncludeZero)
         );
         assert!(
-            CutRange::from_str("-0").is_err_and(|x| x == CutRangeStrError::ListMayNotIncludeZero)
-        );
-        assert!(
-            CutRange::from_str("0-0").is_err_and(|x| x == CutRangeStrError::ListMayNotIncludeZero)
+            CutRange::from_str("0-0").is_err_and(|x| x == ListCutStrError::ListMayNotIncludeZero)
         );
     }
     #[test]

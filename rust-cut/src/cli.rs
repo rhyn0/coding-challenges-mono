@@ -1,31 +1,37 @@
 use std::str::FromStr;
 
-use clap::Parser;
+use clap::{Args, Parser};
 
-use crate::list;
+use crate::range::{self, CutList};
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Cli {
-    /// Select only these bytes.
-    #[arg(long, short, value_parser = list::CutRange::from_str)]
-    pub bytes: Vec<list::CutRange>,
+    #[command(flatten)]
+    pub selectors: Selectors,
 
     /// use DELIM instead of TAB for field delimiter
     #[arg(long, short, default_value_t = '\t')]
     pub delimiter: char,
-
-    ///  select only these fields;  also print any line that
-    /// contains no delimiter character, unless the -s option is
-    /// specified
-    #[arg(long, short, value_parser = list::CutRange::from_str)]
-    pub fields: Vec<list::CutRange>,
 
     /// Files to read from.
     pub files: Vec<String>,
 
     #[arg(long, short, action = clap::ArgAction::Count)]
     pub verbose: u8,
+}
+
+#[derive(Args, Debug)]
+#[group(required = true, multiple = false)]
+pub struct Selectors {
+    /// Select only these bytes.
+    #[arg(long, short, value_parser = range::CutList::from_str)]
+    pub bytes: Option<CutList>,
+    ///  select only these fields;  also print any line that
+    /// contains no delimiter character, unless the -s option is
+    /// specified
+    #[arg(long, short, value_parser = range::CutList::from_str)]
+    pub fields: Option<CutList>,
 }
 
 #[cfg(test)]
@@ -45,8 +51,12 @@ mod tests {
     fn test_parse_cut_range_single() {
         let args = Cli::parse_from("oxcut -b 1 -".split_whitespace());
         assert_eq!(args.files.len(), 1);
-        assert_eq!(args.bytes.len(), 1);
-        assert_eq!(args.bytes[0], list::CutRange::from(1usize));
+        let byte_selector = args.selectors.bytes.unwrap();
+        assert_eq!(byte_selector.len(), 1);
+        assert_eq!(
+            byte_selector,
+            range::CutList::new(vec![range::CutRange::from(1usize)])
+        );
     }
     #[test]
     fn test_parse_cut_range_single_illegal() {
@@ -72,15 +82,15 @@ mod tests {
     }
     // TODO: this functionality is necessary
     #[test]
-    #[should_panic]
     fn test_parse_space_ranges() {
-        let res = Cli::try_parse_from(vec!["oxcut", "-b\"1 2\"", "-"]);
-        assert!(res.is_ok_and(|cli| cli.bytes.len() == 2));
+        let res = Cli::try_parse_from(vec!["oxcut", "-b1 2", "-"]);
+        let bytes_selector = res.unwrap().selectors.bytes.unwrap();
+        assert_eq!(bytes_selector.len(), 2);
     }
     #[test]
-    #[should_panic]
     fn test_parse_comma_ranges() {
         let res = Cli::try_parse_from(vec!["oxcut", "-b1,2", "-"]);
-        assert!(res.is_ok_and(|cli| cli.bytes.len() == 2));
+        let bytes_selector = res.unwrap().selectors.bytes.unwrap();
+        assert_eq!(bytes_selector.len(), 2);
     }
 }
