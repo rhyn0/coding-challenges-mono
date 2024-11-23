@@ -31,6 +31,10 @@ pub struct Cli {
     /// Files to read from.
     pub files: Vec<String>,
 
+    /// line delimiter is NUL, not newline
+    #[arg(short, long)]
+    pub zero_terminated: bool,
+
     #[arg(long, short, action = clap::ArgAction::Count)]
     pub verbose: u8,
 }
