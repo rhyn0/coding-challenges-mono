@@ -10,7 +10,12 @@ use std::{
 use env_logger::Builder;
 use log::{debug, info, LevelFilter};
 
-fn handle_file_fields<F>(reader: &mut Box<dyn BufRead>, delimiter: char, selector: F)
+fn handle_field_fields<F, W: Write>(
+    reader: &mut Box<dyn BufRead>,
+    writer: &mut W,
+    delimiter: char,
+    selector: F,
+) -> io::Result<()>
 where
     F: Fn(usize) -> bool,
 {
@@ -27,28 +32,32 @@ where
             // if first field and the partition is a full line
             // print it as is
             if field_idx == 0 && part.ends_with('\n') {
-                print!("{part}");
+                write!(writer, "{part}")?;
                 break;
             } else if selector(field_idx + 1) {
                 if prev_selected_field {
-                    print!("{delimiter}");
+                    write!(writer, "{delimiter}")?;
                 }
                 prev_selected_field = true;
-                print!("{part}");
+                write!(writer, "{part}")?;
             }
         }
-        println!();
+        writeln!(writer)?;
         buffer.clear();
         prev_selected_field = false;
     }
+    Ok(())
 }
 
-fn handle_byte_fields<F>(reader: &mut Box<dyn BufRead>, selector: F)
+fn handle_byte_fields<F, W: Write>(
+    reader: &mut Box<dyn BufRead>,
+    writer: &mut W,
+    selector: F,
+) -> io::Result<()>
 where
     F: Fn(usize) -> bool,
 {
     let mut buffer = String::new();
-    let stdout = io::stdout();
     while let Ok(read_len) = reader.read_line(&mut buffer) {
         if read_len == 0 {
             // EOF
@@ -60,18 +69,22 @@ where
             // if first field and the partition is a full line
             // print it as is
             if part == b'\n' {
-                println!();
+                writeln!(writer)?;
             } else if selector(field_idx + 1) {
-                let mut handle = stdout.lock();
-                let _ = handle.write(&[part]);
+                write!(writer, "{part}")?;
             }
         }
-        println!();
+        writeln!(writer)?;
         buffer.clear();
     }
+    Ok(())
 }
 
-fn handle_char_fields<F>(reader: &mut Box<dyn BufRead>, selector: F)
+fn handle_char_fields<F, W: Write>(
+    reader: &mut Box<dyn BufRead>,
+    writer: &mut W,
+    selector: F,
+) -> io::Result<()>
 where
     F: Fn(usize) -> bool,
 {
@@ -87,15 +100,17 @@ where
             // if first field and the partition is a full line
             // print it as is
             if part == '\n' {
-                println!();
+                writeln!(writer)?;
             } else if selector(field_idx + 1) {
-                print!("{part}");
+                write!(writer, "{part}")?;
             }
         }
-        println!();
+        writeln!(writer)?;
         buffer.clear();
     }
+    Ok(())
 }
+type OutputHandlerT = dyn FnMut(&mut Box<dyn BufRead>) -> io::Result<()>;
 
 fn main() {
     let mut cli = cli::Cli::parse();
@@ -105,13 +120,34 @@ fn main() {
         2 => Builder::new().filter_level(LevelFilter::Info).init(),
         3.. => Builder::new().filter_level(LevelFilter::max()).init(),
     };
-    let bytes_selector = cli.selectors.bytes.unwrap_or_default();
-    let fields_selector = cli.selectors.fields.unwrap_or_default();
-    let char_selectors = cli.selectors.characters.unwrap_or_default();
-    debug!(
-        "Selectors are bytes {0:?} or fields {1:?} or characters {2:?}",
-        bytes_selector, fields_selector, char_selectors,
-    );
+
+    let stdout = io::stdout();
+    let handle = stdout.lock();
+    let mut writer = io::BufWriter::new(handle);
+
+    let mut cut_func: Box<OutputHandlerT> = if let Some(byte_sel) = cli.selectors.bytes.clone() {
+        debug!("Using bytes selectors");
+        Box::new(move |reader| {
+            handle_byte_fields(reader, &mut writer, |val| {
+                byte_sel.is_selected(val) != cli.complement
+            })
+        })
+    } else if let Some(field_sel) = cli.selectors.fields {
+        debug!("Using fields selectors");
+        Box::new(move |reader| {
+            handle_field_fields(reader, &mut writer, cli.delimiter, |val| {
+                field_sel.is_selected(val) != cli.complement
+            })
+        })
+    } else {
+        let char_sel = cli.selectors.characters.unwrap();
+        debug!("Using character selectors");
+        Box::new(move |reader| {
+            handle_char_fields(reader, &mut writer, |val| {
+                char_sel.is_selected(val) != cli.complement
+            })
+        })
+    };
     if cli.files.is_empty() {
         cli.files.push("-".to_string());
     }
@@ -133,19 +169,10 @@ fn main() {
             };
             Box::new(BufReader::new(f))
         };
-        if !fields_selector.is_empty() {
-            handle_file_fields(&mut reader, cli.delimiter, |val: usize| {
-                fields_selector.is_selected(val) != cli.complement
-            });
-        } else if !bytes_selector.is_empty() {
-            handle_byte_fields(&mut reader, |val: usize| {
-                bytes_selector.is_selected(val) != cli.complement
-            });
-        } else {
-            handle_char_fields(&mut reader, |val: usize| {
-                char_selectors.is_selected(val) != cli.complement
-            });
-        };
+        let writing_result = cut_func(&mut reader);
+        if let Err(e) = writing_result {
+            eprintln!("Failed to work on {filename} - {e}");
+        }
     }
 }
 
