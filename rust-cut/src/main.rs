@@ -14,6 +14,7 @@ fn handle_field_fields<F, W: Write>(
     reader: &mut Box<dyn BufRead>,
     writer: &mut W,
     delimiter: char,
+    output_delimiter: &str,
     suppress_non_delimited: bool,
     selector: F,
 ) -> io::Result<()>
@@ -41,7 +42,7 @@ where
                 break;
             } else if selector(field_idx + 1) {
                 if prev_selected_field {
-                    write!(writer, "{delimiter}")?;
+                    write!(writer, "{output_delimiter}")?;
                 }
                 prev_selected_field = true;
                 write!(writer, "{part}")?;
@@ -134,6 +135,20 @@ fn verify_args(cli: &cli::Cli) -> Result<(), String> {
     }
 }
 
+fn determine_output_delimiter(args: &cli::Cli) -> String {
+    args.output_delimiter.as_ref().map_or_else(
+        || args.delimiter.to_string(),
+        |s| {
+            if s.is_empty() {
+                // Use null byte as the delimiter
+                "\0".to_string()
+            } else {
+                s.to_owned()
+            }
+        },
+    )
+}
+
 type OutputHandlerT = dyn FnMut(&mut Box<dyn BufRead>) -> io::Result<()>;
 fn main() {
     let mut cli = cli::Cli::parse();
@@ -150,6 +165,7 @@ fn main() {
             cmd.error(ClapErrorKind::ArgumentConflict, msg).exit();
         }
     }
+    let delimiter = determine_output_delimiter(&cli);
     let stdout = io::stdout();
     let handle = stdout.lock();
     let mut writer = io::BufWriter::new(handle);
@@ -168,6 +184,7 @@ fn main() {
                 reader,
                 &mut writer,
                 cli.delimiter,
+                &delimiter,
                 cli.only_delimited,
                 |val| field_sel.is_selected(val) != cli.complement,
             )
