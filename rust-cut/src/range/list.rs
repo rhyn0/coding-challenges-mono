@@ -12,13 +12,6 @@ impl CutList {
     pub fn new(ranges: Vec<CutRange>) -> Self {
         Self { container: ranges }
     }
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.container.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.container.is_empty()
-    }
 }
 
 impl Selector for CutList {
