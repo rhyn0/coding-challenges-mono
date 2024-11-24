@@ -63,7 +63,7 @@ mod tests {
     use clap::CommandFactory;
 
     use super::*;
-    use crate::range::cut;
+    use crate::range::cut::{self, CutRange};
 
     #[test]
     fn test_cli() {
@@ -74,7 +74,7 @@ mod tests {
         let args = Cli::parse_from("oxcut -b 1 -".split_whitespace());
         assert_eq!(args.files.len(), 1);
         let byte_selector = args.selectors.bytes.unwrap();
-        assert_eq!(byte_selector.len(), 1);
+        assert_eq!(byte_selector, CutList::new(vec![CutRange::from(1)]));
         assert_eq!(
             byte_selector,
             CutList::new(vec![cut::CutRange::from(1usize)])
@@ -102,17 +102,22 @@ mod tests {
                     .contains("values may not include zero"))
         );
     }
-    // TODO: this functionality is necessary
     #[test]
     fn test_parse_space_ranges() {
         let res = Cli::try_parse_from(vec!["oxcut", "-b1 2", "-"]);
         let bytes_selector = res.unwrap().selectors.bytes.unwrap();
-        assert_eq!(bytes_selector.len(), 2);
+        assert_eq!(
+            bytes_selector,
+            CutList::new(vec![CutRange::from(1), CutRange::from(2)])
+        );
     }
     #[test]
     fn test_parse_comma_ranges() {
         let res = Cli::try_parse_from(vec!["oxcut", "-b1,2", "-"]);
         let bytes_selector = res.unwrap().selectors.bytes.unwrap();
-        assert_eq!(bytes_selector.len(), 2);
+        assert_eq!(
+            bytes_selector,
+            CutList::new(vec![CutRange::from(1), CutRange::from(2)])
+        );
     }
 }
