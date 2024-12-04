@@ -3,6 +3,9 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
+    /// Print the number of times each line occurred along with the line.
+    #[arg(short, long, group = "output_type")]
+    pub count: bool,
     #[arg(value_name = "input", group = "input")]
     pub input_file: Option<String>,
     #[arg(value_name = "output", requires = "input")]

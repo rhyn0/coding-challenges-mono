@@ -1,4 +1,5 @@
 use std::io::{BufRead, BufReader, Read};
+pub mod count;
 
 pub fn read_lines<R>(reader: BufReader<R>) -> impl Iterator<Item = String>
 where
@@ -14,6 +15,11 @@ where
             acc
         })
         .into_iter()
+}
+
+pub mod prelude {
+    pub use super::count::line_counts;
+    pub use super::read_lines;
 }
 
 #[cfg(test)]
