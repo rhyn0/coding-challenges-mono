@@ -38,6 +38,8 @@ where
 {
     if args.count {
         Box::new(uniq::prelude::line_counts(reader))
+    } else if args.repeated {
+        Box::new(uniq::prelude::repeated_lines(reader))
     } else {
         Box::new(uniq::prelude::read_lines(reader))
     }

@@ -6,6 +6,11 @@ pub struct Args {
     /// Print the number of times each line occurred along with the line.
     #[arg(short, long, group = "output_type")]
     pub count: bool,
+    /// Discard lines that are not repeated. When used by itself, this
+    /// option causes uniq to print the first copy of each repeated line,
+    /// and nothing else.
+    #[arg(short = 'd', long, group = "output_type")]
+    pub repeated: bool,
     #[arg(value_name = "input", group = "input")]
     pub input_file: Option<String>,
     #[arg(value_name = "output", requires = "input")]

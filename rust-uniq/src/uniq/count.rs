@@ -25,9 +25,9 @@ impl LineCounts {
         }
     }
 
-    fn outputs(self) -> OutputCounts {
+    fn into_counted_lines(self) -> CountedLines {
         // turn the `HashMap` into an iterator but preserving the order of the keys as stored in `order`
-        OutputCounts {
+        CountedLines {
             iter: self.order.into_iter(),
             counts: self.seen,
         }
@@ -35,21 +35,23 @@ impl LineCounts {
 }
 
 #[derive(Debug)]
-struct OutputCounts {
+struct CountedLines {
     iter: std::vec::IntoIter<String>,
     counts: HashMap<String, usize>,
 }
 
-fn format_key_val(key: &str, val: usize) -> String {
-    format!("{val:>4} {key}")
+impl CountedLines {
+    fn format_key_val(key: &str, val: usize) -> String {
+        format!("{val:>4} {key}")
+    }
 }
 
-impl Iterator for OutputCounts {
+impl Iterator for CountedLines {
     type Item = String;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(key) = self.iter.next() {
             if let Some(&count) = self.counts.get(&key) {
-                return Some(format_key_val(&key, count));
+                return Some(Self::format_key_val(&key, count));
             }
         }
         None
@@ -67,7 +69,7 @@ where
             acc.add(&line);
             acc
         })
-        .outputs()
+        .into_counted_lines()
 }
 
 #[cfg(test)]
