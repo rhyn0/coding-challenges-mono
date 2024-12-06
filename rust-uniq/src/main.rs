@@ -40,6 +40,8 @@ where
         Box::new(uniq::prelude::line_counts(reader))
     } else if args.repeated {
         Box::new(uniq::prelude::repeated_lines(reader))
+    } else if args.unique {
+        Box::new(uniq::prelude::unique_lines(reader))
     } else {
         Box::new(uniq::prelude::read_lines(reader))
     }

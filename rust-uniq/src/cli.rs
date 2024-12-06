@@ -11,6 +11,11 @@ pub struct Args {
     /// and nothing else.
     #[arg(short = 'd', long, group = "output_type")]
     pub repeated: bool,
+    /// Discard the last line that would be output for a
+    /// repeated input group. When used by itself, this option
+    /// causes uniq to print unique lines, and nothing else.
+    #[arg(short, long, group = "output_type")]
+    pub unique: bool,
     #[arg(value_name = "input", group = "input")]
     pub input_file: Option<String>,
     #[arg(value_name = "output", requires = "input")]

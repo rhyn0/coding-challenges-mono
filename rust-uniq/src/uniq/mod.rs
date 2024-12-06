@@ -35,6 +35,7 @@ where
 
 pub mod prelude {
     pub use super::count::line_counts;
+    pub use super::count::unique_lines;
     pub use super::read_lines;
     pub use super::repeated_lines;
 }
