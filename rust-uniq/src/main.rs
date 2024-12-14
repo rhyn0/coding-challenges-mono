@@ -32,19 +32,21 @@ fn create_writer(output_path: Option<&String>) -> io::BufWriter<Box<dyn io::Writ
     )
 }
 
-fn handle_args<R>(args: &cli::Args, reader: BufReader<R>) -> Box<dyn Iterator<Item = String>>
+fn handle_args<R>(args: &cli::Args, reader: BufReader<R>) -> uniq::prelude::LineCounts
 where
     R: Read + 'static,
 {
-    if args.count {
-        Box::new(uniq::prelude::line_counts(reader))
-    } else if args.repeated {
-        Box::new(uniq::prelude::repeated_lines(reader))
+    let mut uniq_reader = uniq::prelude::UniqueReader::new(reader);
+    if args.repeated {
+        uniq_reader = uniq_reader.repeated();
     } else if args.unique {
-        Box::new(uniq::prelude::unique_lines(reader))
-    } else {
-        Box::new(uniq::prelude::read_lines(reader))
+        uniq_reader = uniq_reader.unique();
     }
+    let mut counts = uniq_reader.into_line_counts();
+    if args.count {
+        counts = counts.include_counts();
+    }
+    counts
 }
 
 fn main() {
@@ -59,5 +61,7 @@ fn main() {
     };
     let mut writer = create_writer(args.output_file.as_ref());
     let lines = handle_args(&args, reader);
-    lines.for_each(|line| writeln!(&mut writer, "{line}").expect("write output"));
+    lines
+        .into_lines()
+        .for_each(|line| write!(&mut writer, "{line}").expect("write output"));
 }

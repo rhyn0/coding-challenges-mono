@@ -9,6 +9,7 @@ Based on the GNU core util - [`uniq`](https://www.gnu.org/software/coreutils/man
 In no particular order:
 
 - [ ] need to handle preservation of line ending sequence. Technically part of the line and needs to be compared.
+- [ ] Small divergence against GNU uniq, when final line does not end with a newline.
 
 
 ## Downloading

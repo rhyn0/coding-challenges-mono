@@ -9,12 +9,12 @@ pub struct Args {
     /// Discard lines that are not repeated. When used by itself, this
     /// option causes uniq to print the first copy of each repeated line,
     /// and nothing else.
-    #[arg(short = 'd', long, group = "output_type")]
+    #[arg(short = 'd', long, group = "selection")]
     pub repeated: bool,
     /// Discard the last line that would be output for a
     /// repeated input group. When used by itself, this option
     /// causes uniq to print unique lines, and nothing else.
-    #[arg(short, long, group = "output_type")]
+    #[arg(short, long, group = "selection")]
     pub unique: bool,
     #[arg(value_name = "input", group = "input")]
     pub input_file: Option<String>,
