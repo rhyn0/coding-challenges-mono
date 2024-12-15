@@ -2,6 +2,7 @@ use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Args {
     /// Print the number of times each line occurred along with the line.
     #[arg(short, long, group = "output_type")]
@@ -11,6 +12,9 @@ pub struct Args {
     /// and nothing else.
     #[arg(short = 'd', long, group = "selection")]
     pub repeated: bool,
+    /// ignore case seems like the best next one `-i`
+    #[arg(short = 'i', long, group = "selection")]
+    pub ignore_case: bool,
     /// Discard the last line that would be output for a
     /// repeated input group. When used by itself, this option
     /// causes uniq to print unique lines, and nothing else.

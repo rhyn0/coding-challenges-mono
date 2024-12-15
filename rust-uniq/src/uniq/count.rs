@@ -11,6 +11,8 @@ where
     keep_repeated: bool,
     /// only keep unique group lines
     only_unique: bool,
+    // ignore case of following lines
+    ignore_case: bool,
 }
 
 impl<R> UniqueReader<R>
@@ -22,6 +24,7 @@ where
             reader,
             keep_repeated: false,
             only_unique: false,
+            ignore_case: false,
         }
     }
 
@@ -39,29 +42,50 @@ where
         self
     }
 
+    /// ignore case of following lines
+    pub const fn case_insensitive(mut self) -> Self {
+        self.ignore_case = true;
+        self
+    }
+
     fn read_lines(self) -> Vec<ElementWithCount> {
+        // Store the configuration values we need before moving self.reader
+        let keep_repeated = self.keep_repeated;
+        let only_unique = self.only_unique;
+        let ignore_case = self.ignore_case;
+
         let mut elements: Vec<ElementWithCount> = self
             .reader
             .lines()
             .map(|l| l.expect("Read a line") + "\n")
             .filter(|l| !l.trim_end().is_empty())
             .fold(Vec::new(), |mut acc, line| {
-                // if the list is empty, or the last element is not the same as the current line
-                // then add it to the list as its a new group.
-                // EXCEPT for when self.keep_repeated is true, which means we only want to keep groups that have been repeated
-                // EXCEPT for when self.only_unique is true, which means we only want to keep groups that have no repeats
-                if acc.is_empty() || acc.last().unwrap().0 != line {
-                    if !acc.is_empty()
-                        && (self.keep_repeated && acc.last().unwrap().1 == 1
-                            || self.only_unique && acc.last().unwrap().1 > 1)
+                if acc.is_empty() {
+                    acc.push((line, 1));
+                    return acc;
+                }
+
+                let last = acc.last().unwrap();
+                let equal = if ignore_case {
+                    last.0.to_lowercase() == line.to_lowercase()
+                } else {
+                    last.0 == line
+                };
+
+                if equal {
+                    let count = last.1 + 1;
+                    acc.last_mut().unwrap().1 = count;
+                } else {
+                    // if the last element is not the same as the current line
+                    // then add it to the list as its a new group.
+                    // EXCEPT for when self.keep_repeated is true, which means we only want to keep groups that have been repeated
+                    // EXCEPT for when self.only_unique is true, which means we only want to keep groups that are not repeated
+                    if (keep_repeated && acc.last().unwrap().1 == 1)
+                        || (only_unique && acc.last().unwrap().1 > 1)
                     {
                         acc.pop();
                     }
                     acc.push((line, 1));
-                } else {
-                    // our list has entries, and the last element is the same as the current line
-                    // so add one to the count
-                    acc.last_mut().unwrap().1 += 1;
                 }
                 acc
             });
@@ -69,6 +93,7 @@ where
         if self.keep_repeated && !elements.is_empty() && elements.last().unwrap().1 == 1 {
             elements.pop();
         }
+
         elements
     }
 
@@ -200,5 +225,19 @@ mod tests {
         let uniq_reader = UniqueReader::new(reader).repeated();
         let duplicate_lines: Vec<_> = uniq_reader.into_line_counts().into_lines().collect();
         assert_eq!(duplicate_lines, vec!["hello\n".to_string()]);
+    }
+    #[test]
+    fn test_regular_case_insensitive_lower_first() {
+        let reader = BufReader::new(Cursor::new("hello\nHELLO\n".to_string()));
+        let ci_reader = UniqueReader::new(reader).case_insensitive();
+        let lines: Vec<_> = ci_reader.into_line_counts().into_lines().collect();
+        assert_eq!(lines, vec!["hello\n".to_string()]);
+    }
+    #[test]
+    fn test_regular_case_insensitive_upper_first() {
+        let reader = BufReader::new(Cursor::new("HELLO\nhello\n".to_string()));
+        let ci_reader = UniqueReader::new(reader).case_insensitive();
+        let lines: Vec<_> = ci_reader.into_line_counts().into_lines().collect();
+        assert_eq!(lines, vec!["HELLO\n".to_string()]);
     }
 }

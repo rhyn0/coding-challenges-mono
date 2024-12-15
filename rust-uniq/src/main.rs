@@ -42,6 +42,9 @@ where
     } else if args.unique {
         uniq_reader = uniq_reader.unique();
     }
+    if args.ignore_case {
+        uniq_reader = uniq_reader.case_insensitive();
+    }
     let mut counts = uniq_reader.into_line_counts();
     if args.count {
         counts = counts.include_counts();
