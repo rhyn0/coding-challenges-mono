@@ -1,5 +1,11 @@
 use std::io::{BufRead, BufReader, Read};
 
+#[derive(Debug, Copy, Clone)]
+pub enum AllRepeatedChoice {
+    None,
+    Prepend,
+    Separate,
+}
 #[derive(Debug)]
 pub struct UniqueReader<R>
 where
@@ -13,6 +19,8 @@ where
     only_unique: bool,
     // ignore case of following lines
     ignore_case: bool,
+    /// if `AllRepeatedChoice` is set, then we will use that to determine how to delimit groups of repeated lines
+    all_repeated_choice: Option<AllRepeatedChoice>,
 }
 
 impl<R> UniqueReader<R>
@@ -25,6 +33,7 @@ where
             keep_repeated: false,
             only_unique: false,
             ignore_case: false,
+            all_repeated_choice: None,
         }
     }
 
@@ -32,6 +41,7 @@ where
     /// Overrides `unique`
     pub const fn repeated(mut self) -> Self {
         self.keep_repeated = true;
+        self.only_unique = false;
         self
     }
 
@@ -39,6 +49,7 @@ where
     /// Incompatible with `repeated`
     pub const fn unique(mut self) -> Self {
         self.only_unique = true;
+        self.keep_repeated = false;
         self
     }
 
@@ -48,11 +59,22 @@ where
         self
     }
 
+    /// set a type of `AllRepeatedChoice`
+    /// Incompatible with `unique` and `repeated`
+    pub const fn all_repeated(mut self, choice: AllRepeatedChoice) -> Self {
+        self.all_repeated_choice = Some(choice);
+        self.only_unique = false;
+        self.keep_repeated = false;
+        self
+    }
+
     fn read_lines(self) -> Vec<ElementWithCount> {
         // Store the configuration values we need before moving self.reader
-        let keep_repeated = self.keep_repeated;
+        let mut keep_repeated = self.keep_repeated;
         let only_unique = self.only_unique;
         let ignore_case = self.ignore_case;
+        keep_repeated |= self.all_repeated_choice.is_some();
+        let repeated_choice = self.all_repeated_choice;
 
         let mut elements: Vec<ElementWithCount> = self
             .reader
@@ -90,10 +112,28 @@ where
                 acc
             });
         // handle final group with no repeats
-        if self.keep_repeated && !elements.is_empty() && elements.last().unwrap().1 == 1 {
+        if keep_repeated && !elements.is_empty() && elements.last().unwrap().1 == 1 {
             elements.pop();
         }
-
+        if let Some(repeat) = repeated_choice {
+            let mut new_elements = Vec::new();
+            for (line, count) in elements {
+                match repeat {
+                    AllRepeatedChoice::Prepend => {
+                        new_elements.push(("\n".to_string(), 1));
+                        new_elements.extend(std::iter::repeat((line, 1)).take(count));
+                    }
+                    AllRepeatedChoice::Separate => {
+                        new_elements.extend(std::iter::repeat((line, 1)).take(count));
+                        new_elements.push(("\n".to_string(), 1));
+                    }
+                    AllRepeatedChoice::None => {
+                        new_elements.extend(std::iter::repeat((line, 1)).take(count));
+                    }
+                }
+            }
+            elements = new_elements;
+        }
         elements
     }
 
@@ -239,5 +279,52 @@ mod tests {
         let ci_reader = UniqueReader::new(reader).case_insensitive();
         let lines: Vec<_> = ci_reader.into_line_counts().into_lines().collect();
         assert_eq!(lines, vec!["HELLO\n".to_string()]);
+    }
+    #[test]
+    fn test_all_repeated_none() {
+        let reader = BufReader::new(Cursor::new("hello\nhello\nhi".to_string()));
+        let no_sep_repeated_reader =
+            UniqueReader::new(reader).all_repeated(AllRepeatedChoice::None);
+        let lines: Vec<_> = no_sep_repeated_reader
+            .into_line_counts()
+            .into_lines()
+            .collect();
+        assert_eq!(lines, vec!["hello\n".to_string(), "hello\n".to_string()]);
+    }
+    #[test]
+    fn test_all_repeated_prepend() {
+        let reader = BufReader::new(Cursor::new("hello\nhello\nhi".to_string()));
+        let prep_repeated_reader =
+            UniqueReader::new(reader).all_repeated(AllRepeatedChoice::Prepend);
+        let lines: Vec<_> = prep_repeated_reader
+            .into_line_counts()
+            .into_lines()
+            .collect();
+        assert_eq!(
+            lines,
+            vec![
+                "\n".to_string(),
+                "hello\n".to_string(),
+                "hello\n".to_string()
+            ]
+        );
+    }
+    #[test]
+    fn test_all_repeated_separate() {
+        let reader = BufReader::new(Cursor::new("hello\nhello\nhi".to_string()));
+        let sep_repeated_reader =
+            UniqueReader::new(reader).all_repeated(AllRepeatedChoice::Separate);
+        let lines: Vec<_> = sep_repeated_reader
+            .into_line_counts()
+            .into_lines()
+            .collect();
+        assert_eq!(
+            lines,
+            vec![
+                "hello\n".to_string(),
+                "hello\n".to_string(),
+                "\n".to_string()
+            ]
+        );
     }
 }

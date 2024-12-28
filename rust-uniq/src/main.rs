@@ -6,6 +6,16 @@ use std::{
     io::{self, stdin, stdout, BufReader, BufWriter, Read, Write},
 };
 
+impl From<cli::DelimitMethod> for uniq::prelude::AllRepeatedChoice {
+    fn from(val: cli::DelimitMethod) -> Self {
+        match val {
+            cli::DelimitMethod::None => Self::None,
+            cli::DelimitMethod::Prepend => Self::Prepend,
+            cli::DelimitMethod::Separate => Self::Separate,
+        }
+    }
+}
+
 fn create_reader(filename: &str) -> Result<BufReader<Box<dyn io::Read>>, io::Error> {
     if filename == "-" {
         Ok(BufReader::new(Box::new(stdin())))
@@ -44,6 +54,9 @@ where
     }
     if args.ignore_case {
         uniq_reader = uniq_reader.case_insensitive();
+    }
+    if let Some(delimit) = args.all_repeated {
+        uniq_reader = uniq_reader.all_repeated(delimit.into());
     }
     let mut counts = uniq_reader.into_line_counts();
     if args.count {
