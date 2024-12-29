@@ -30,6 +30,15 @@ pub struct Args {
         num_args=0..=1,
     )]
     pub all_repeated: Option<DelimitMethod>,
+    /// Delimit items with a zero byte rather than a newline (ASCII LF).
+    /// I.e., treat input as items separated by ASCII NUL and terminate
+    /// output items with ASCII NUL. This option can be useful in conjunction
+    /// with ‘perl -0’ or ‘find -print0’ and ‘xargs -0’ which do the same in
+    /// order to reliably handle arbitrary file names (even those containing
+    /// blanks or other special characters). With -z the newline character is
+    /// treated as a field separator.
+    #[arg(short, long, group = "selection")]
+    pub zero_terminated: bool,
     /// Discard the last line that would be output for a
     /// repeated input group. When used by itself, this option
     /// causes uniq to print unique lines, and nothing else.

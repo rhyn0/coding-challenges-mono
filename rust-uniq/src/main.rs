@@ -55,6 +55,9 @@ where
     if args.ignore_case {
         uniq_reader = uniq_reader.case_insensitive();
     }
+    if args.zero_terminated {
+        uniq_reader = uniq_reader.set_item_delimiter('\0');
+    }
     if let Some(delimit) = args.all_repeated {
         uniq_reader = uniq_reader.all_repeated(delimit.into());
     }

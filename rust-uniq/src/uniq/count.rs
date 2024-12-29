@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufReader, Read};
 
 #[derive(Debug, Copy, Clone)]
 pub enum AllRepeatedChoice {
@@ -21,6 +21,8 @@ where
     ignore_case: bool,
     /// if `AllRepeatedChoice` is set, then we will use that to determine how to delimit groups of repeated lines
     all_repeated_choice: Option<AllRepeatedChoice>,
+    /// item char delimiter
+    delimiter: char,
 }
 
 impl<R> UniqueReader<R>
@@ -34,6 +36,7 @@ where
             only_unique: false,
             ignore_case: false,
             all_repeated_choice: None,
+            delimiter: '\n',
         }
     }
 
@@ -68,7 +71,13 @@ where
         self
     }
 
-    fn read_lines(self) -> Vec<ElementWithCount> {
+    /// set the delimiter to parse input with
+    pub const fn set_item_delimiter(mut self, delimiter: char) -> Self {
+        self.delimiter = delimiter;
+        self
+    }
+
+    fn read_lines(&mut self) -> Vec<ElementWithCount> {
         // Store the configuration values we need before moving self.reader
         let mut keep_repeated = self.keep_repeated;
         let only_unique = self.only_unique;
@@ -76,11 +85,20 @@ where
         keep_repeated |= self.all_repeated_choice.is_some();
         let repeated_choice = self.all_repeated_choice;
 
-        let mut elements: Vec<ElementWithCount> = self
-            .reader
-            .lines()
-            .map(|l| l.expect("Read a line") + "\n")
-            .filter(|l| !l.trim_end().is_empty())
+        let mut string_content = String::new();
+        if let Err(e) = self.reader.read_to_string(&mut string_content) {
+            eprintln!("Error reading from input: {e}");
+            return Vec::new();
+        }
+        let mut elements: Vec<ElementWithCount> = string_content
+            .split(self.delimiter)
+            .filter_map(|l| {
+                if l.trim_end().is_empty() {
+                    None
+                } else {
+                    Some(l.to_string() + "\n")
+                }
+            })
             .fold(Vec::new(), |mut acc, line| {
                 if acc.is_empty() {
                     acc.push((line, 1));
@@ -137,7 +155,7 @@ where
         elements
     }
 
-    pub fn into_line_counts(self) -> LineCounts {
+    pub fn into_line_counts(mut self) -> LineCounts {
         self.read_lines().into()
     }
 }
@@ -242,7 +260,7 @@ mod tests {
             deduped_lines,
             // TODO: this fails because we aren't clearing out the empty line
             // want to pull the "read,unwrap lines" logic into own struct first
-            vec!["hello\n".to_string(), "world\n".to_string()]
+            vec!["hello\n".to_string(), "world\r\n".to_string()]
         )
     }
     #[test]
@@ -326,5 +344,12 @@ mod tests {
                 "\n".to_string()
             ]
         );
+    }
+    #[test]
+    fn test_zero_terminated() {
+        let reader = BufReader::new(Cursor::new("hello\0hello\0hi".to_string()));
+        let zero_term_reader = UniqueReader::new(reader).set_item_delimiter('\0');
+        let lines: Vec<_> = zero_term_reader.into_line_counts().into_lines().collect();
+        assert_eq!(lines, vec!["hello\n".to_string(), "hi\n".to_string()]);
     }
 }
